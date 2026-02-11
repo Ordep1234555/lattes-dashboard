@@ -17,8 +17,9 @@ st.set_page_config(
 @st.cache_data
 def get_curriculos_data():
 
-    DATA_FILENAME = Path(__file__).parent/'data/curriculos_processados.csv'
-    raw_df = pd.read_csv(DATA_FILENAME,
+    # DATA_FILENAME = Path(__file__).parent/'data/curriculos_processados.csv'
+    url = "https://drive.google.com/uc?id=11ecM-F5dWYH4V3RqxLB_4ISLT-7iAye3"
+    raw_df = pd.read_csv(url,
                          dtype={
                              "ano_inicio": "Int64",
                              "ano_conclusao": "Int64"
