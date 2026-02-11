@@ -1,151 +1,183 @@
 import streamlit as st
+import altair as alt
 import pandas as pd
 import math
 from pathlib import Path
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title='Análise de Dados da Plataforma Lattes',
+    page_icon=':books:',  # This is an emoji shortcode. Could be a URL too.
 )
 
 # -----------------------------------------------------------------------------
 # Declare some useful functions.
 
+
 @st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+def get_curriculos_data():
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+    DATA_FILENAME = Path(__file__).parent/'data/curriculos_processados.csv'
+    raw_df = pd.read_csv(DATA_FILENAME,
+                         dtype={
+                             "ano_inicio": "Int64",
+                             "ano_conclusao": "Int64"
+                         })
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+    raw_df['grande_area'] = raw_df['grande_area'].str.split(';')
+    raw_df = raw_df.explode('grande_area')
+    raw_df['grande_area'] = raw_df['grande_area'].str.strip()
 
     MIN_YEAR = 1960
-    MAX_YEAR = 2022
+    MAX_YEAR = 2023
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
+    conclusoes_df = raw_df.dropna(subset=['ano_conclusao', 'grande_area', 'tipo_formacao',
+                                  'genero', 'uf_instituicao', 'flag_bolsa'])
+    conclusoes_df = conclusoes_df[
+        (conclusoes_df['ano_conclusao'] >= MIN_YEAR) &
+        (conclusoes_df['ano_conclusao'] <= MAX_YEAR)
+    ]
+
+    return conclusoes_df
+
+
+def aggregate_by_column(df, coluna):
+    return (
+        df.groupby(['ano_conclusao', coluna])
+        .size()
+        .reset_index(name='quantidade')
     )
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
 
-    return gdp_df
-
-gdp_df = get_gdp_data()
+base_df = get_curriculos_data()
 
 # -----------------------------------------------------------------------------
 # Draw the actual page
 
 # Set the title that appears at the top of the page.
 '''
-# :earth_americas: GDP dashboard
+# Análise de Dados da Plataforma Lattes :books:
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
+Análise de dados a partir da Plataforma Lattes. Projeto pessoal para portifólio.
+O objetivo inicial era observar o impacto da pandemia de COVID-19 na formação de
+estudantes de pós-graduação a partir da grande área de formação.
+Dados limitados pela coleta feita ainda no início de 2025, o que pode gerar distorções.
 '''
 
 # Add some spacing
 ''
 ''
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+min_value = 1960
+max_value = 2023
 
 from_year, to_year = st.slider(
-    'Which years are you interested in?',
+    'Anos para análise:',
     min_value=min_value,
     max_value=max_value,
-    value=[min_value, max_value])
+    value=[2010, 2021])
 
-countries = gdp_df['Country Code'].unique()
+tipo_analise = st.segmented_control(
+    "Tipo de análise:",
+    ['Grande Área', 'Tipo de Formação',
+     'Gênero', 'UF da Instituição', 'Bolsas'],
+    default='Grande Área',
+)
 
-if not len(countries):
-    st.warning("Select at least one country")
+coluna = {
+    'Grande Área': 'grande_area',
+    'Tipo de Formação': 'tipo_formacao',
+    'Gênero': 'genero',
+    'UF da Instituição': 'uf_instituicao',
+    'Bolsas': 'flag_bolsa'
+}[tipo_analise]
 
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
+current_df = aggregate_by_column(base_df, coluna)
+options = current_df[coluna].unique()
+
+if not len(options):
+    st.warning(f"Selecione pelo menos uma opção para a coluna '{coluna}'.")
+
+selected_options = st.multiselect(
+    f'{tipo_analise} para análise:',
+    options=options,
+    default=options.tolist())
 
 ''
 ''
 ''
 
 # Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
+filtered_df = current_df[
+    (current_df[coluna].isin(selected_options))
+    & (current_df['ano_conclusao'] <= to_year)
+    & (from_year <= current_df['ano_conclusao'])
 ]
 
-st.header('GDP over time', divider='gray')
+st.header('Formações ao longo dos anos', divider='gray')
 
 ''
 
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
+chart = (
+    alt.Chart(filtered_df)
+    .mark_line(point=True)
+    .encode(
+        x=alt.X(
+            "ano_conclusao:O",
+            title="Ano de Conclusão",
+            axis=alt.Axis(labelAngle=0)
+        ),
+        y=alt.Y(
+            "quantidade:Q",
+            title="Número de Conclusões"
+        ),
+        color=alt.Color(
+            f"{coluna}:N",
+            title=tipo_analise
+        ),
+        tooltip=[
+            alt.Tooltip("ano_conclusao:O", title="Ano"),
+            alt.Tooltip(f"{coluna}:N", title=tipo_analise),
+            alt.Tooltip("quantidade:Q", title="Conclusões")
+        ]
+    )
 )
 
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
+st.altair_chart(chart, use_container_width=True)
 
 ''
+''
 
-cols = st.columns(4)
+first_year = current_df[current_df['ano_conclusao'] == from_year]
+last_year = current_df[current_df['ano_conclusao'] == to_year]
 
-for i, country in enumerate(selected_countries):
+st.header(f'Crescimento entre {from_year} e {to_year}', divider='gray')
+
+''
+
+cols = st.columns(3)
+
+for i, area in enumerate(selected_options):
     col = cols[i % len(cols)]
 
     with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
+        first_quantidade = first_year[first_year[coluna]
+                                      == area]['quantidade'].iat[0]
+        last_quantidade = last_year[last_year[coluna]
+                                    == area]['quantidade'].iat[0]
 
-        if math.isnan(first_gdp):
-            growth = 'n/a'
+        if math.isnan(first_quantidade):
+            value = f"{first_quantidade} → {last_quantidade}"
+            delta = 'n/a'
             delta_color = 'off'
         else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
+            value = f"{first_quantidade} → {last_quantidade}"
+            delta = f'{((last_quantidade - first_quantidade) / first_quantidade * 100):,.2f}%'
             delta_color = 'normal'
 
         st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
+            label=f'{area}',
+            value=value,
+            delta=delta,
             delta_color=delta_color
         )
