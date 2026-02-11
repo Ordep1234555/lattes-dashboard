@@ -3,6 +3,7 @@ import altair as alt
 import pandas as pd
 import math
 from pathlib import Path
+import gdown
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
@@ -19,7 +20,16 @@ def get_curriculos_data():
 
     # DATA_FILENAME = Path(__file__).parent/'data/curriculos_processados.csv'
     url = "https://drive.google.com/uc?id=11ecM-F5dWYH4V3RqxLB_4ISLT-7iAye3"
-    raw_df = pd.read_csv(url,
+
+    data_path = Path("data")
+    data_path.mkdir(exist_ok=True)
+
+    csv_path = data_path / "curriculos_processados.csv"
+
+    if not csv_path.exists():
+        gdown.download(url, str(csv_path), quiet=False)
+
+    raw_df = pd.read_csv(csv_path,
                          dtype={
                              "ano_inicio": "Int64",
                              "ano_conclusao": "Int64"
