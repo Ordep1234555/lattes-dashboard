@@ -7,8 +7,9 @@ import gdown
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title='Análise de Dados da Plataforma Lattes',
-    page_icon=':books:',  # This is an emoji shortcode. Could be a URL too.
+    page_title='Análise de Dados Lattes',
+    page_icon=':books:',
+    layout='wide',
 )
 
 # -----------------------------------------------------------------------------
@@ -46,6 +47,11 @@ def get_curriculos_data():
         (raw_df['ano_conclusao'] >= MIN_YEAR) &
         (raw_df['ano_conclusao'] <= MAX_YEAR)
     ]
+
+    raw_df['nao_concluido_flag'] = (
+        (raw_df['curso_concluido'] == False) |
+        (raw_df['ano_conclusao'].isna())
+    )
 
     return raw_df
 
@@ -87,19 +93,35 @@ Dados limitados pela coleta feita ainda no início de 2025, o que pode gerar dis
 min_value = 1960
 max_value = 2023
 
-from_year, to_year = st.slider(
-    'Anos para análise:',
-    min_value=min_value,
-    max_value=max_value,
-    value=[2010, 2021])
+# Layout Principal
+cols = st.columns([2, 4, 3])
 
-tipo_analise = st.segmented_control(
-    "Tipo de análise:",
-    ['Grande Área', 'Tipo de Formação',
-     'Gênero', 'UF da Instituição', 'Bolsas'],
-    default='Grande Área',
+left_cell = cols[0].container(
+    border=True, height=400, vertical_alignment="top"
+)
+center_cell = cols[1].container(
+    border=False, height=400, vertical_alignment="center"
+)
+right_cell = cols[2].container(
+    border=False, height=400, vertical_alignment="center"
 )
 
+# Filtro de Ano e Categoria
+with left_cell:
+    from_year, to_year = st.slider(
+        'Anos para análise:',
+        min_value=min_value,
+        max_value=max_value,
+        value=[2010, 2021])
+
+    tipo_analise = st.pills(
+        "Tipo de análise:",
+        ['Grande Área', 'Tipo de Formação',
+         'Gênero', 'UF da Instituição', 'Bolsas'],
+        default='Grande Área',
+    )
+
+# Dicionario da Categoria para o nome da coluna correspondente no DataFrame
 coluna = {
     'Grande Área': 'grande_area',
     'Tipo de Formação': 'tipo_formacao',
@@ -108,6 +130,7 @@ coluna = {
     'Bolsas': 'flag_bolsa'
 }[tipo_analise]
 
+# Estabele DF principal
 current_df = aggregate_by_column(base_df, coluna)
 options = [x for x in sorted(
     current_df[coluna].unique()) if x != 'Sem Informação']
@@ -115,16 +138,19 @@ options = [x for x in sorted(
 if not len(options):
     st.warning(f"Selecione pelo menos uma opção para a coluna '{coluna}'.")
 
-selected_options = st.multiselect(
-    f'{tipo_analise} para análise:',
-    options=options,
-    default=options,
-    placeholder='Selecione uma ou mais opções'
-)
+# Filtro de opções dentro da Categoria selecionada
+with left_cell:
+    selected_options = st.multiselect(
+        f'{tipo_analise} para análise:',
+        options=options,
+        default=options,
+        placeholder='Selecione uma ou mais opções'
+    )
 
-''
+n_cols1 = math.ceil(len(selected_options) / 2)
+n_cols2 = math.ceil(len(selected_options) / 3)
 
-# Filter the data
+# DFs com anos e opções selecionadas
 filtered_df = current_df[
     (current_df[coluna].isin(selected_options))
     & (current_df['ano_conclusao'] <= to_year)
@@ -136,129 +162,212 @@ null_df = current_df[
     & (from_year <= current_df['ano_conclusao'])
 ]
 
-st.header('Formações ao longo dos anos', divider='gray')
-
-''
-
-chart = (
-    alt.Chart(filtered_df)
-    .mark_line(point=True)
-    .encode(
-        x=alt.X(
-            "ano_conclusao:O",
-            title="Ano de Conclusão",
-            axis=alt.Axis(labelAngle=0)
-        ),
-        y=alt.Y(
-            "quantidade:Q",
-            title="Número de Conclusões"
-        ),
-        color=alt.Color(
-            f"{coluna}:N",
-            title=tipo_analise
-        ),
-        tooltip=[
-            alt.Tooltip("ano_conclusao:O", title="Ano"),
-            alt.Tooltip(f"{coluna}:N", title=tipo_analise),
-            alt.Tooltip("quantidade:Q", title="Conclusões")
-        ]
-    )
-)
-
-st.altair_chart(chart, use_container_width=True)
-
-''
-
-st.header(f'Resumo entre {from_year} e {to_year}', divider='gray')
-
-''
-
-cols = st.columns(2)
-
-total_conclusoes = filtered_df['quantidade'].sum()
-total_null = null_df['quantidade'].sum()
-total_conclusoes_coluna = (
-    filtered_df.groupby(coluna)['quantidade']
-    .sum()
-    .reset_index()
-    .sort_values(by='quantidade', ascending=False)
-)
-
-with cols[0]:
-    st.metric(
-        label='Total de Conclusões ✅',
-        value=f"{total_conclusoes:,}"
-    )
-
-with cols[1]:
-    st.metric(
-        label=f'Total {tipo_analise} nulo ❌',
-        value=f"{total_null:,}"
-    )
-''
-
-cols = st.columns(3)
-
-for i, selected in enumerate(selected_options):
-    col = cols[i % len(cols)]
-
-    with col:
-        row_conclusoes_coluna = total_conclusoes_coluna.loc[
-            total_conclusoes_coluna[coluna] == selected, 'quantidade']
-        valor_conclusoes_coluna = row_conclusoes_coluna.iat[
-            0] if not row_conclusoes_coluna.empty else 0
-        st.metric(
-            label=f'Total {selected}',
-            value=f"{valor_conclusoes_coluna:,}"
-        )
-
-''
-
-first_year = current_df[current_df['ano_conclusao'] == from_year]
-last_year = current_df[current_df['ano_conclusao'] == to_year]
+first_year = filtered_df[filtered_df['ano_conclusao'] == from_year]
+last_year = filtered_df[filtered_df['ano_conclusao'] == to_year]
 n = to_year - from_year
 
-''
+total_conclusoes_ano = filtered_df.groupby(
+    'ano_conclusao')['quantidade'].sum().reset_index()
+total_conclusoes_ano['crescimento_pct'] = (
+    total_conclusoes_ano['quantidade']
+    .pct_change() * 100
+).round(2)
+total_conclusoes_ano['crescimento_pct'] = total_conclusoes_ano['crescimento_pct'].fillna(
+    0).replace([float('inf'), -float('inf')], 0)
+melhor_ano = total_conclusoes_ano.loc[total_conclusoes_ano['crescimento_pct'].idxmax(
+)]
+pior_ano = total_conclusoes_ano.loc[total_conclusoes_ano['crescimento_pct'].idxmin(
+)]
 
-st.header(
-    f'Crescimento Médio Anual Composto', divider='gray')
-
-''
-
-cols = st.columns(3)
 cagr_list = []
-
 for i, selected in enumerate(selected_options):
-    col = cols[i % len(cols)]
+    first_row = first_year[first_year[coluna] == selected]
+    last_row = last_year[last_year[coluna] == selected]
+    first_quantidade = first_row['quantidade'].iat[0] if not first_row.empty else 0
+    last_quantidade = last_row['quantidade'].iat[0] if not last_row.empty else 0
 
-    with col:
-        first_row = first_year[first_year[coluna] == selected]
-        last_row = last_year[last_year[coluna] == selected]
-        first_quantidade = first_row['quantidade'].iat[0] if not first_row.empty else 0
-        last_quantidade = last_row['quantidade'].iat[0] if not last_row.empty else 0
-
-        if (first_quantidade == 0 or last_quantidade == 0):
-            value = f"{first_quantidade} → {last_quantidade}"
-            delta = 'n/a'
-            delta_color = 'off'
-        else:
-            value = f"{first_quantidade} → {last_quantidade}"
-            cagr = (last_quantidade / first_quantidade) ** (1/n) - 1
-            cagr_list.append((selected, cagr * 100))
-            delta = f'{(cagr * 100):,.2f}%'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{selected}',
-            value=value,
-            delta=delta,
-            delta_color=delta_color
-        )
+    if (first_quantidade == 0 or last_quantidade == 0 or n == 0):
+        cagr_list.append((selected, 0))
+    else:
+        cagr = (last_quantidade / first_quantidade) ** (1/n) - 1
+        cagr_list.append((selected, cagr * 100))
 
 cagr_df = pd.DataFrame(
     cagr_list,
     columns=[coluna, 'carg']
 ).sort_values('carg', ascending=False)
+
+melhor_crescimento = cagr_df.loc[cagr_df['carg'].idxmax()]
+pior_crescimento = cagr_df.loc[cagr_df['carg'].idxmin()]
+
+taxa = (
+    base_df
+    .groupby(['ano_inicio', coluna])
+    .agg(
+        total=('nao_concluido_flag', 'count'),
+        nao_concluidos=('nao_concluido_flag', 'sum')
+    )
+    .reset_index()
+)
+
+taxa['taxa_nao_conclusao'] = (
+    taxa['nao_concluidos'] / taxa['total']
+)
+
+filtered_taxa = taxa[
+    (taxa[coluna].isin(selected_options))
+    & (taxa['ano_inicio'] <= to_year)
+    & (from_year <= taxa['ano_inicio'])
+]
+
+with center_cell:
+    chart = (
+        alt.Chart(
+            filtered_df, title=f'Número de Conclusões por Ano - {tipo_analise}')
+        .mark_line(point=True)
+        .encode(
+            x=alt.X(
+                "ano_conclusao:O",
+                title="Ano de Conclusão",
+                axis=alt.Axis(labelAngle=0)
+            ),
+            y=alt.Y(
+                "quantidade:Q",
+                title="Número de Conclusões"
+            ),
+            color=alt.Color(
+                f"{coluna}:N",
+                title=tipo_analise
+            ),
+            tooltip=[
+                alt.Tooltip("ano_conclusao:O", title="Ano"),
+                alt.Tooltip(f"{coluna}:N", title=tipo_analise),
+                alt.Tooltip("quantidade:Q", title="Conclusões")
+            ]
+        )
+        .configure_legend(disable=True)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+with right_cell:
+    chart = (
+        alt.Chart(
+            filtered_df, title=f'Distribuição de Conclusões por {tipo_analise}')
+        .mark_arc()
+        .encode(
+            alt.Theta(
+                "quantidade:Q",
+                aggregate='sum',
+                title="Número de Conclusões"
+            ),
+            alt.Color(
+                f"{coluna}:N",
+                title=tipo_analise
+            )
+        )
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+st.header(f'Resumo entre {from_year} e {to_year}', divider='gray')
+
+total_conclusoes = total_conclusoes_ano['quantidade'].sum()
+total_null = null_df['quantidade'].sum()
+total_nao_concluidos = filtered_taxa['nao_concluidos'].sum()
+total_iniciados = filtered_taxa['total'].sum()
+
+main_cols = st.columns([1, 1, 1, 2])
+
+with main_cols[0]:
+    with st.container(border=True, height=150):
+        cols = st.columns(2)
+
+        with cols[0]:
+            st.metric(
+                label='Total de Conclusões ✅',
+                value=f"{total_conclusoes:,}"
+            )
+
+        with cols[1]:
+            st.metric(
+                label=f'{tipo_analise} nulo ❌',
+                value=f"{total_null:,}"
+            )
+
+with main_cols[1]:
+    with st.container(border=True, height=150):
+        cols = st.columns(2)
+
+        with cols[0]:
+            st.metric(
+                label='Total Iniciados ✅',
+                value=f"{total_iniciados:,}"
+            )
+
+        with cols[1]:
+            st.metric(
+                label='Total Não Concluídos ❌',
+                value=f"{total_nao_concluidos:,}"
+            )
+
+with main_cols[2]:
+    with st.container(border=True, height=150):
+        cols = st.columns(2)
+
+        with cols[0]:
+            st.metric(
+                label='Melhor Ano 📈',
+                value=f"{int(melhor_ano['ano_conclusao'])}",
+                delta=f"{melhor_ano['crescimento_pct']}%"
+            )
+
+        with cols[1]:
+            st.metric(
+                label=f'Pior Ano 📉',
+                value=f"{int(pior_ano['ano_conclusao'])}",
+                delta=f"{pior_ano['crescimento_pct']}%"
+            )
+
+with main_cols[3]:
+    with st.container(border=True, height=150):
+        cols = st.columns(2)
+
+        with cols[0]:
+            st.metric(
+                label='Maior Crescimento 📈',
+                value=f"{melhor_crescimento[coluna]}",
+                delta=f"{melhor_crescimento['carg']:,.2f}%"
+            )
+
+        with cols[1]:
+            st.metric(
+                label='Menor Crescimento 📉',
+                value=f"{pior_crescimento[coluna]}",
+                delta=f"{pior_crescimento['carg']:,.2f}%"
+            )
+
+''
+
+st.header('Crescimento Médio Anual Composto', divider='gray',
+          help="CAGR (Crescimento Anual Composto) é uma métrica que mede o crescimento médio anual de um investimento ou indicador ao longo de um período. (Valor Final / Valor Inicial)^(1/n) - 1, onde n é o número de anos.")
+
+''
+
+cols = st.columns(3)
+
+for i, selected in enumerate(selected_options):
+    col = cols[i % len(cols)]
+
+    with col:
+        value = f"{first_quantidade} → {last_quantidade}"
+        carg_row = cagr_df[cagr_df[coluna] == selected]
+        carg_value = carg_row['carg'].iat[0] if not carg_row.empty else 0
+
+        st.metric(
+            label=f'{selected}',
+            value=value,
+            delta=f"{carg_value:,.2f}%",
+            delta_color="normal" if carg_value != 0 else "off"
+        )
 
 ''
 
@@ -286,7 +395,8 @@ st.altair_chart(chart, use_container_width=True)
 
 ''
 
-st.header(f'Crescimento Percentual Anual', divider='gray')
+st.header(f'Crescimento Percentual Anual', divider='gray',
+          help="Crescimento percentual anual é a variação percentual de um indicador de um ano para o outro. ((Valor Ano Atual - Valor Ano Anterior) / Valor Ano Anterior) * 100")
 
 ''
 
@@ -320,93 +430,70 @@ for i, selected in enumerate(selected_options):
         )
         st.altair_chart(chart, use_container_width=True)
 
-crescimento_df = (
+crescimento_area_df = (
     filtered_df
     .groupby(coluna)['crescimento_pct']
     .mean()
     .reset_index(name='Crescimento médio (%)')
-    .sort_values(by='Crescimento médio (%)', ascending=False)
+    .sort_values(by='Crescimento médio (%)', ascending=True)
 )
 
-crescimento_df = crescimento_df.rename(columns={
+crescimento_area_df = crescimento_area_df.rename(columns={
     coluna: tipo_analise
+})
+
+crescimento_ano_df = (
+    filtered_df
+    .groupby('ano_conclusao')['crescimento_pct']
+    .mean()
+    .reset_index(name='Crescimento médio (%)')
+    .sort_values(by='Crescimento médio (%)', ascending=True)
+)
+
+crescimento_ano_df = crescimento_ano_df.rename(columns={
+    'ano_conclusao': 'Ano de Conclusão'
 })
 
 ''
 st.header(f'Crescimento Médio Anual', divider='gray')
 ''
-st.dataframe(
-    crescimento_df.style
-    .format({'Crescimento médio (%)': '{:.2f}%'})
-    .background_gradient(
-        subset=['Crescimento médio (%)'],
-        cmap='RdYlGn'
-    ),
-    hide_index=True,
-    use_container_width=True
-)
+
+cols = st.columns(2)
+
+with cols[0]:
+    st.dataframe(
+        crescimento_area_df.style
+        .format({'Crescimento médio (%)': '{:.2f}%'})
+        .background_gradient(
+            subset=['Crescimento médio (%)'],
+            cmap='RdYlGn'
+        ),
+        hide_index=True,
+        use_container_width=True
+    )
+
+with cols[1]:
+    st.dataframe(
+        crescimento_ano_df.style
+        .format({'Crescimento médio (%)': '{:.2f}%'})
+        .background_gradient(
+            subset=['Crescimento médio (%)'],
+            cmap='RdYlGn'
+        ),
+        hide_index=True,
+        use_container_width=True
+    )
 
 ''
 st.header(f'Cursos Não Concluídos Por Ano de Início', divider='gray')
 ''
 
-base_df['nao_concluido_flag'] = (
-    (base_df['curso_concluido'] == False) |
-    (base_df['ano_conclusao'].isna())
-)
-
-taxa = (
-    base_df
-    .groupby(['ano_inicio', coluna])
-    .agg(
-        total=('nao_concluido_flag', 'count'),
-        nao_concluidos=('nao_concluido_flag', 'sum')
-    )
-    .reset_index()
-)
-
-taxa['taxa_nao_conclusao'] = (
-    taxa['nao_concluidos'] / taxa['total']
-)
-
-filtered_taxa = taxa[
-    (taxa[coluna].isin(selected_options))
-    & (taxa['ano_inicio'] <= to_year)
-    & (from_year <= taxa['ano_inicio'])
-]
-
-tabela_taxa = (
-    base_df
-    .groupby('ano_inicio')
-    .agg(
-        total=('nao_concluido_flag', 'count'),
-        nao_concluidos=('nao_concluido_flag', 'sum')
-    )
-    .reset_index()
-)
-tabela_taxa['taxa_nao_conclusao'] = (
-    tabela_taxa['nao_concluidos'] / tabela_taxa['total']
-)
-filtered_tabela_taxa = tabela_taxa[
-    (tabela_taxa['ano_inicio'] <= to_year)
-    & (from_year <= tabela_taxa['ano_inicio'])
-]
-filtered_tabela_taxa = filtered_tabela_taxa.sort_values(
-    'taxa_nao_conclusao', ascending=False)
-
-filtered_tabela_taxa = filtered_tabela_taxa.rename(columns={
-    'ano_inicio': 'Ano de Início',
-    'total': 'Cursos Concluídos',
-    'nao_concluidos': 'Cursos Não Concluídos',
-    'taxa_nao_conclusao': 'Taxa de Não Conclusão (%)'
-})
-
 cols = st.columns(2)
 
-for i, categoria in enumerate(selected_options):
+for i, selected in enumerate(selected_options):
 
     df_cat = filtered_taxa[
-        filtered_taxa[coluna] == categoria
+        filtered_taxa[coluna] == selected
     ]
 
     if df_cat.empty:
@@ -445,11 +532,19 @@ for i, categoria in enumerate(selected_options):
     )
 
     with cols[i % 2]:
-        st.markdown(f"**{categoria}**")
+        st.markdown(f"**{selected}**")
         st.altair_chart(chart, use_container_width=True)
 
+filtered_taxa = filtered_taxa.rename(columns={
+    'ano_inicio': 'Ano de Início',
+    coluna: tipo_analise,
+    'total': 'Cursos Concluídos',
+    'nao_concluidos': 'Cursos Não Concluídos',
+    'taxa_nao_conclusao': 'Taxa de Não Conclusão (%)'
+}).sort_values('Taxa de Não Conclusão (%)', ascending=False)
+
 st.dataframe(
-    filtered_tabela_taxa.style
+    filtered_taxa.style
     .format({'Taxa de Não Conclusão (%)': '{:.2%}'})
     .background_gradient(
         subset=['Taxa de Não Conclusão (%)'],
