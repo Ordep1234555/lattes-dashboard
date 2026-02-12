@@ -1,0 +1,37 @@
+- DOCUMENTAR
+    - Github
+- DEIXAR MAIS BONITO
+- PESSOAS QUE NÃO COMPLETAM CURSOS
+- PREVISÕES
+- GRAFICOS INDIVINDUAIS MENORES -> Crescimentos
+- Total de curriculos
+- Mapa?
+- Novos Dados
+- Dentro/Fora Brasil
+
+ANALISES:
+(1ª parte - Somente numeros totais)
+Total de curriculos
+Mestrado/Doutorado
+Com Bolsa/Sem Bolsa
+Distribuicao por Genero
+Distribuicao por UF
+Status dos cursos
+Distribuicao por Grande Area
+Distribuicao por Area
+(2ª parte - Por ano)
+Crescimento de conclusões por ano
+Crescimento de bolsas por ano
+(3ª parte - Analise estatistica Pandemia)
+Impacto da pandemia na conclusao dos cursos
+Impacto da pandemia na concessao de bolsas
+Impacto da pandemia por genero
+Impacto da pandemia por UF
+Impacto da pandemia por Grande Area
+Impacto da pandemia por Area
+Impacto da pandemia por tipo de formacao
+Regressão linear dos dados para ver tendencia e impacto da pandemia
+Interrompidos durante a pandemia
+Levar em consideranção o ano de 2020 como um ano atípico (metade do ano com pandemia)
+Levar em consideração que os dados de 2023 estão incompletos
+Levar em consideração data_atualizacao para ver se o currículo está atualizado
