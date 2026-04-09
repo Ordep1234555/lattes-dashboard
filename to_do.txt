@@ -11,7 +11,7 @@
 - Substituir uf por regiao?
 - Considerar: data_atualizacao, uf_nascimento, capital_nascimento, pais_nascimento
 - Dados Novos -> Media de duração por ano_inicio
-
+- Legenda Cursos não concluidos por ano de inicio (dual-axis)
 
 Impacto da pandemia na conclusao dos cursos
 Impacto da pandemia na concessao de bolsas
