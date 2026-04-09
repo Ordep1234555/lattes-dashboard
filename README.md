@@ -13,7 +13,7 @@
 
 ## 🛠️ Tecnologias Utilizadas
 - Linguagem: Python 3.x
-- Interface: [Stremlit](https://lattes-dashboard-9tm0lsqqmgb.streamlit.app/)
+- Interface: [Streamlit](https://lattes-dashboard-9tm0lsqqmgb.streamlit.app/)
 - Manipulação de Dados: Pandas
 - Gráficos: Altair
 - Ambiente: Docker
